@@ -375,7 +375,7 @@ public DeliveryResult run(DeliveryInput input) {
 | 5 | Code generation | Code Generator | After (4) | OAS, ArchetypeRef | Generated code bundle (zipped, signed) | Deterministic | Code archive in S3 | Generator error → non-retryable fail |
 | 6 | Repo provisioning / branch strategy | Repo Provisioner | After (5) | Code bundle, tenant config | GitLab project, `main` + `release/*` branches, MR | Deterministic | Initial commit, MR link | Name collision → deterministic suffix; GitLab 5xx → retry |
 | 7 | CI pipeline execution | CI Orchestrator | After (6) | MR SHA | Pipeline run id | Deterministic | Pipeline job logs in S3 | Pipeline failure → stage fail with link to job |
-| 8 | Dev validation | Quality + Security Aggregators + Test Coordinator | After (7) jobs finish | Sonar report, test output, scan results | Aggregated reports + verdicts | Deterministic | `QualityReport.json`, `SecurityReport.json`, `TestReport.json` | Any failing policy → stage fail; human fix required |
+| 8 | Dev validation | Quality + Security Aggregators + Test Coordinator | After (7) jobs finish | Sonar report, test output, scan results | Aggregated reports + verdicts | Deterministic (tests themselves — see §6a — are generated deterministically + authored by humans; LLMs only assist) | `QualityReport.json`, `SecurityReport.json`, `TestReport.json` | Any failing policy → stage fail; human fix required. Platform never modifies tests. |
 | 9 | AI governance evals | AI Governance Service | Parallel with (8) | Generated code, OAS | `GovernanceReport` | Deterministic rules + checksum-based checks | Report JSON | Violations → stage fail |
 | 10 | MR validation | CI Orchestrator | After (8) passes | `main`-target pipeline | MR pipeline status | Deterministic | MR pipeline logs | Red → fail; green → auto-merge |
 | 11 | SIT deploy + smoke | Environment Promoter + Test Coordinator | After (10) merged | Artefact version | Deployment id, smoke results | Deterministic | `sit-deployment.json`, `smoke-results.json` | Deploy fail or smoke red → fail |
@@ -385,6 +385,114 @@ public DeliveryResult run(DeliveryInput input) {
 | 15 | Release pack compilation | Release Pack Compiler + Evidence Summariser | After (14) | All artefacts + approvals | `ReleasePack` (signed, immutable) | Deterministic + LLM narrative | Pack in Object-Locked S3 | Compile fail → retry; summariser fail → templated fallback |
 | 16 | **Human approval — Production** | Approval Coordinator | After (15) | Release pack | `ApprovalRecord` | Human | Signed approval | Rejection → end |
 | 17 | Production deploy | Environment Promoter | After (16) | Approved pack | Deploy id | Deterministic | Deploy logs, post-deploy verification | Verification fail → automated rollback + high-sev alert |
+
+---
+
+## 6a. Test Pack Creation & Execution
+
+Tests deserve their own treatment because "who writes the tests" is the single biggest lever on whether the platform is trustworthy.
+
+### 6a.1 Guiding principle
+
+> **LLMs may propose tests. Humans merge them. The platform executes them deterministically. The platform never modifies tests to make a failing build go green.**
+
+The most dangerous failure mode for this class of system is an automated retry loop that silently "fixes" failing tests. That path is closed.
+
+### 6a.2 Test taxonomy and ownership
+
+| Test type | Authored by | Reviewed by | Executed by | Notes |
+|---|---|---|---|---|
+| **Contract tests** (schema conformance, Pact against OAS) | Deterministic generator from OAS + archetype | CODEOWNERS review on MR | GitLab CI | Regenerated every run; never hand-edited. |
+| **Happy-path controller / CRUD tests** (one per operation) | Deterministic generator + archetype templates | CODEOWNERS | GitLab CI | Hits controller with canned inputs, asserts 2xx + schema shape. |
+| **Wiring / framework tests** (Spring context loads, auth filter wired, health endpoint up, problem-detail format) | Archetype | — (template-owned) | GitLab CI | Same across all services; updated when archetype updates. |
+| **Security-rail tests** (unauthenticated call → 401, missing scope → 403, CORS config, security headers) | Archetype | — | GitLab CI | Mandatory for every service. |
+| **Unit tests for generated mapping / validation code** | Deterministic generator (stub + assertion templates) | CODEOWNERS | GitLab CI | Covers the mechanical code that OpenAPI Generator produces. |
+| **Test seed data** (example payloads, boundary values, partner-realistic fixtures) | **LLM-assisted** from `SpecModel` + domain RAG; stored as fixtures | CODEOWNERS | Used by other tests | LLM produces JSON; deterministic post-step validates against schema and strips PII. |
+| **Business-logic unit tests** (real assertions about domain behaviour) | **Human** service team; LLM may suggest via PR comment | CODEOWNERS | GitLab CI | Cannot be merged without explicit human approval. |
+| **Component / integration tests** (in-process with Testcontainers, stubs) | Archetype provides harness; human writes the scenarios | CODEOWNERS | GitLab CI | Covers integration wiring without partner dependency. |
+| **SIT integration tests** (partner sandbox, reconciliation flows, event replay) | **Human** — service team owns; partner-fixture library curated by central integration team | Integration team + service team | Test Coordinator + partner sandbox | The crown jewels of the regression suite. Partner semantics are not trusted to LLMs. |
+| **End-to-end smoke** (deployed environment, 3–5 scenarios) | Archetype + human additions | CODEOWNERS | Environment Promoter post-deploy | Must pass inside 2 minutes; gates promotion. |
+| **Non-functional: perf / load** | Human (service team); archetype ships a default Gatling/K6 profile | Performance engineer + service team | Scheduled GitLab CI jobs | Budgets defined in a `performance-budget.yaml` checked into the repo. |
+| **Non-functional: security scans (SAST/DAST/SCA)** | Tool (Snyk/Semgrep/Trivy) | Security reviewer on high-severity findings | GitLab CI | Deterministic; results feed the Security Gate Aggregator. |
+| **Chaos / resilience** | Human (platform team), opt-in per service | Platform + service team | Scheduled in a lower environment | Not on the delivery critical path. |
+
+### 6a.3 Where the LLM actually helps
+
+LLMs are useful for **test authoring assistance**, not test execution. Concretely:
+
+- **Seed data generation.** Given a `SpecModel` operation and its schemas, generate a set of realistic positive examples, boundary values, and negative cases. Output is JSON matching the schema; a deterministic validator rejects anything non-conformant before it reaches a fixture file.
+- **Test case suggestion.** For a given operation, propose a list of scenarios (happy, auth-missing, field-missing, value-out-of-range, concurrency, partial failure). The platform posts these as an **MR comment** on the scaffolded service; a human decides which to implement. No test is merged without a human adding assertions.
+- **Edge-case generation from historical incidents.** RAG over closed incidents → "here are three scenarios that have broken similar APIs; consider tests for them". Again, suggestion only.
+
+What the LLM does **not** do:
+- Write assertion logic that gets merged without human review.
+- Modify existing tests (ever).
+- Choose which failing tests to "skip" or "quarantine".
+- Drive a retry loop that changes code or tests until a build passes.
+
+### 6a.4 Deterministic test generation — what comes out of the box
+
+Every generated repo contains, without human input:
+
+```
+src/test/java/
+├── contract/              # generated from OAS — one test class per operation
+├── controller/            # happy-path per operation, schema assertions
+├── wiring/                # Spring context, config profiles, actuator
+├── security/              # auth rails, CORS, problem-detail format, rate-limit behaviour
+├── mapping/               # DTO↔domain mappers, validator behaviour
+└── fixtures/              # LLM-generated + schema-validated example payloads
+```
+
+All of these are regenerated on every run — they live under a `// @Generated` marker and a pre-commit hook rejects hand edits. Anything that needs a human is written in a sibling directory:
+
+```
+src/test/java/
+├── business/              # domain assertions — human-owned
+├── integration/           # Testcontainers scenarios — human-owned
+└── sit/                   # SIT scenarios — human-owned, partner fixtures referenced
+```
+
+### 6a.5 SIT test packs
+
+SIT is where the real regression suite lives. It must be predictable and owned.
+
+- **Central partner-fixture library.** One repo per partner (BACS, FPS, Settlement). Versioned. Contains: mock service definitions, recorded request/response traces, event sequences, reference data.
+- **Per-service SIT pack.** A folder in the service repo that declares which partner fixtures it uses, and which scenarios it exercises. Executed by the Test Coordinator against the service in its SIT namespace with the partner fixtures hot-loaded.
+- **Selection logic.** On each run, Test Coordinator resolves: `service x OAS version x partner fixture version → test pack`. Reproducible given the same inputs.
+- **Flake classification.** Failures tagged by stack-hash + error-class matcher; matches against a known-flake registry; known-flake failures trigger one retry; real failures do not retry.
+- **Partner sandbox pool.** Ephemeral namespaces in v2 (Phase 2). In v1, a queue with fairness + priority + SLA timers; platform emits a wait-time metric per partner.
+
+### 6a.6 Coverage as a gate — with caveats
+
+Coverage is a deterministic gate but a weak signal. The rule:
+
+- Minimum line/branch coverage on the **human-owned** test directories (business, integration, sit). Default 70% line / 50% branch; tunable per archetype.
+- **No coverage counted** from generated test directories. Otherwise generators inflate the number and the gate becomes meaningless.
+- Coverage delta vs. previous green build is published; regressions surfaced in MR review, blocking only on significant drops.
+- Mutation testing (Pitest) recommended in Phase 2 as a better signal of test strength.
+
+### 6a.7 Test data management
+
+- **Synthetic-first.** Default path: LLM-generated fixtures validated against schema + PII-scrubbed + versioned in the service repo.
+- **Recorded partner traces.** Recorded once with a partner-issued test dataset; replayed thereafter.
+- **No production data.** Under any circumstance. Enforced by a pre-commit hook that detects real account numbers / sort codes (Luhn + UK bank format regexes) and fails the commit.
+- **Fixtures signed.** Fixture files include a SHA and a `generated-by` marker (model id + prompt version for LLM-produced data).
+
+### 6a.8 Test Coordinator — responsibilities (deterministic service)
+
+- **Inputs:** service version, OAS version, partner fixture versions, test pack selector.
+- **Outputs:** `TestReport { passed, failed, flaky_retried, partner_wait_ms, coverage }`, raw logs in S3.
+- **Never:** writes tests, modifies tests, skips tests, quarantines tests on the fly.
+- **Retries:** only failures matching the known-flake registry, once. All other failures are real.
+
+### 6a.9 Summary recommendation
+
+- **Deterministic generators** produce the bulk of mechanical tests (contract, wiring, happy-path, mapping).
+- **Archetype** provides the harness and the security/wiring rails, identical across services.
+- **LLMs** help authors by proposing scenarios and seed data; nothing the LLM produces enters the test suite without a human review in an MR.
+- **Humans** write the assertions that encode business judgement (business logic, SIT scenarios, performance budgets).
+- **Platform** executes everything deterministically and reports outcomes. It never modifies tests to pass a build.
 
 ---
 
