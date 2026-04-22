@@ -58,7 +58,7 @@ Strongly opinionated. Where this document says "use X", it means: do not debate 
 |---|---|---|
 | Frontend (console) | **React 18 + TypeScript + Vite**, Tailwind, TanStack Query, Zustand for UI state | Matches existing simulation; low-ceremony; good dev ergonomics. |
 | Control plane API | **Java 21 + Spring Boot 3.x** | Team already owns this stack (you're generating Spring Boot services). Mature auth, actuator, gRPC, observability. |
-| Workflow engine | **Temporal (self-hosted on EKS, or Temporal Cloud)** | Durable execution, native retries, signals for human approval, checkpoints, visibility API. The single most important tech choice in this document. |
+| Workflow engine | **Temporal (self-hosted on EKS, or Temporal Cloud)** | Durable execution, native retries, signals for human approval, checkpoints, visibility API. The single most important tech choice in this document. Rationale + alternatives: [ADR-0001](./adr/0001-temporal-orchestration-gitlab-execution.md). |
 | Agent runtime (LLM workers) | **Python 3.12 + FastAPI + Temporal Python SDK** | Python has the richest LLM tooling (LangChain/LlamaIndex/DSPy, Bedrock SDK, evals). Run as dedicated workers, not part of the control plane. |
 | Deterministic workers | **Java (Spring) or Go**, your choice per team skill | Code gen, GitLab ops, validation — CPU/IO bound, no LLM. |
 | Messaging / events | **Temporal signals + an outbox table → EventBridge** for cross-system events only | Do not build a Kafka-centric choreography. Temporal is the source of truth. |
