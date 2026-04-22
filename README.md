@@ -147,4 +147,4 @@ vercel --prod
 
 ## License
 
-Unlicensed — internal demo artefact.
+Released under the [MIT License](./LICENSE) © 2026 Krishan Singh. Free to use, modify, and redistribute with attribution.
