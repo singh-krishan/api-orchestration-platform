@@ -31,12 +31,15 @@ export type ArtifactType =
 
 export type Severity = 'info' | 'success' | 'warning' | 'error' | 'milestone';
 
+export type AgentExecutionKind = 'llm' | 'deterministic' | 'hybrid';
+
 export interface AgentTask {
   id: string;
   name: string;
   description: string;
   state: NodeState;
   durationMs: number;
+  kind: AgentExecutionKind;
   startedAt?: number;
   completedAt?: number;
   failureMessage?: string;

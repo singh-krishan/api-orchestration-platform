@@ -27,21 +27,24 @@ export const STAGE_DEFINITIONS: Stage[] = [
         name: 'Interface Spec Ingestion Agent',
         description: 'Parses interface specification and extracts endpoint metadata.',
         state: 'pending',
-        durationMs: 2000
+        durationMs: 2000,
+        kind: 'llm'
       },
       {
         id: 'oas-authoring',
         name: 'OAS Authoring Agent',
         description: 'Synthesises a draft OpenAPI 3.1 contract from the parsed interface.',
         state: 'pending',
-        durationMs: 2800
+        durationMs: 2800,
+        kind: 'llm'
       },
       {
         id: 'oas-quality',
         name: 'OAS Quality Agent',
         description: 'Validates OAS against Enterprise Integration schema guardrails and style rules.',
         state: 'pending',
-        durationMs: 1800
+        durationMs: 1800,
+        kind: 'deterministic'
       }
     ],
     artifactIds: [
@@ -64,21 +67,24 @@ export const STAGE_DEFINITIONS: Stage[] = [
         name: 'Archetype Template Agent',
         description: 'Selects and materialises the Enterprise Integration Spring Boot archetype.',
         state: 'pending',
-        durationMs: 1800
+        durationMs: 1800,
+        kind: 'deterministic'
       },
       {
         id: 'implementation',
         name: 'Implementation Agent',
         description: 'Generates controllers, services, DTOs and unit tests for each endpoint.',
         state: 'pending',
-        durationMs: 3200
+        durationMs: 3200,
+        kind: 'deterministic'
       },
       {
         id: 'gitlab-simulation',
         name: 'GitLab Simulation Agent',
         description: 'Commits to feature branch, opens MR, publishes CI pipeline YAML.',
         state: 'pending',
-        durationMs: 2200
+        durationMs: 2200,
+        kind: 'deterministic'
       }
     ],
     artifactIds: [
@@ -103,28 +109,32 @@ export const STAGE_DEFINITIONS: Stage[] = [
         name: 'Local Build Agent',
         description: 'Executes Gradle build against the generated workspace.',
         state: 'pending',
-        durationMs: 2400
+        durationMs: 2400,
+        kind: 'deterministic'
       },
       {
         id: 'regression-test',
         name: 'Regression Test Agent',
         description: 'Runs unit + regression suites and collates coverage.',
         state: 'pending',
-        durationMs: 3000
+        durationMs: 3000,
+        kind: 'deterministic'
       },
       {
         id: 'quality-gate',
         name: 'Quality Gate Agent',
         description: 'Applies SonarQube-style quality gate to the generated service.',
         state: 'pending',
-        durationMs: 1800
+        durationMs: 1800,
+        kind: 'deterministic'
       },
       {
         id: 'security-assessment',
         name: 'Security Assessment Agent',
         description: 'Runs SAST + SCA against the service and flags HIGH+ findings.',
         state: 'pending',
-        durationMs: 2400
+        durationMs: 2400,
+        kind: 'deterministic'
       }
     ],
     artifactIds: [
@@ -148,14 +158,16 @@ export const STAGE_DEFINITIONS: Stage[] = [
         name: 'AI Output Eval Agent',
         description: 'Scores AI-generated code on style conformance, hallucination risk and spec fidelity.',
         state: 'pending',
-        durationMs: 2200
+        durationMs: 2200,
+        kind: 'hybrid'
       },
       {
         id: 'policy-check',
         name: 'Governance Policy Agent',
         description: 'Checks ADR alignment, license allowlist, PII handling and forbidden-pattern rules.',
         state: 'pending',
-        durationMs: 1800
+        durationMs: 1800,
+        kind: 'deterministic'
       }
     ],
     artifactIds: [
@@ -177,21 +189,24 @@ export const STAGE_DEFINITIONS: Stage[] = [
         name: 'MR Pipeline Agent',
         description: 'Runs the full GitLab CI pipeline against the merge-result ref on feature/payments-reconciliation-v1.',
         state: 'pending',
-        durationMs: 3200
+        durationMs: 3200,
+        kind: 'deterministic'
       },
       {
         id: 'mergeability-check',
         name: 'Mergeability Agent',
         description: 'Verifies no conflicts, required approvals present, protected-branch rules satisfied.',
         state: 'pending',
-        durationMs: 1600
+        durationMs: 1600,
+        kind: 'deterministic'
       },
       {
         id: 'main-merge',
         name: 'Main Branch Merge Agent',
         description: 'Squash-merges to main with conventional-commit message and tags the release candidate.',
         state: 'pending',
-        durationMs: 1800
+        durationMs: 1800,
+        kind: 'deterministic'
       }
     ],
     artifactIds: [
@@ -214,21 +229,24 @@ export const STAGE_DEFINITIONS: Stage[] = [
         name: 'SIT Deploy Agent',
         description: 'Deploys build artefact to the SIT Kubernetes namespace.',
         state: 'pending',
-        durationMs: 2600
+        durationMs: 2600,
+        kind: 'deterministic'
       },
       {
         id: 'smoke-test',
         name: 'Smoke Test Agent',
         description: 'Runs health, auth and golden-path probes against the live SIT service.',
         state: 'pending',
-        durationMs: 2200
+        durationMs: 2200,
+        kind: 'deterministic'
       },
       {
         id: 'integration-coordination',
         name: 'Integration Coordination Agent',
         description: 'Orchestrates end-to-end integration tests across Enterprise Integration partners.',
         state: 'pending',
-        durationMs: 2000
+        durationMs: 2000,
+        kind: 'deterministic'
       }
     ],
     artifactIds: [
@@ -251,14 +269,16 @@ export const STAGE_DEFINITIONS: Stage[] = [
         name: 'Pre-Prod Deploy Agent',
         description: 'Deploys to pre-prod with blue/green strategy; runs canary probes.',
         state: 'pending',
-        durationMs: 2600
+        durationMs: 2600,
+        kind: 'deterministic'
       },
       {
         id: 'release-readiness',
         name: 'Release Readiness Agent',
         description: 'Audits checklist, signs off gates, drafts stakeholder release notes.',
         state: 'pending',
-        durationMs: 2000
+        durationMs: 2000,
+        kind: 'hybrid'
       }
     ],
     artifactIds: [
@@ -281,7 +301,8 @@ export const STAGE_DEFINITIONS: Stage[] = [
         name: 'Production Approval Agent',
         description: 'Assembles the final approval pack and raises the production gate.',
         state: 'pending',
-        durationMs: 2200
+        durationMs: 2200,
+        kind: 'hybrid'
       }
     ],
     artifactIds: [

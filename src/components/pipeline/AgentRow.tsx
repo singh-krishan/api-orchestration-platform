@@ -6,11 +6,62 @@ import {
   Loader2,
   Pause,
   RotateCcw,
-  X
+  X,
+  Sparkles,
+  Cog,
+  Combine
 } from 'lucide-react';
-import type { AgentTask, NodeState } from '@/types';
+import type { AgentExecutionKind, AgentTask, NodeState } from '@/types';
 import { cn } from '@/lib/cn';
 import { formatDuration } from '@/lib/format';
+
+const KIND_STYLES: Record<
+  AgentExecutionKind,
+  { chip: string; label: string; icon: typeof Sparkles; title: string }
+> = {
+  llm: {
+    chip: 'bg-violet-500/10 text-violet-200 border-violet-400/30',
+    label: 'AI',
+    icon: Sparkles,
+    title: 'LLM-driven — reasons over unstructured input or drafts natural-language output'
+  },
+  deterministic: {
+    chip: 'bg-sky-500/10 text-sky-200 border-sky-400/30',
+    label: 'Code',
+    icon: Cog,
+    title: 'Deterministic service — runs algorithmic code, no LLM in the critical path'
+  },
+  hybrid: {
+    chip: 'bg-amber-500/10 text-amber-200 border-amber-400/30',
+    label: 'Hybrid',
+    icon: Combine,
+    title: 'Hybrid — deterministic pipeline with an LLM-assisted step (narrative, summary, or scoring)'
+  }
+};
+
+export function AgentKindBadge({
+  kind,
+  size = 'sm'
+}: {
+  kind: AgentExecutionKind;
+  size?: 'sm' | 'md';
+}) {
+  const k = KIND_STYLES[kind];
+  const Icon = k.icon;
+  return (
+    <span
+      title={k.title}
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1 rounded-full border font-semibold uppercase tracking-wide',
+        k.chip,
+        size === 'sm' ? 'px-1.5 py-[1px] text-[9.5px]' : 'px-2 py-0.5 text-[10.5px]'
+      )}
+    >
+      <Icon className={cn(size === 'sm' ? 'h-2.5 w-2.5' : 'h-3 w-3')} />
+      {k.label}
+    </span>
+  );
+}
 
 const STATE_STYLES: Record<NodeState, { text: string; ring: string; chip: string; label: string }> = {
   pending:    { text: 'text-slate-500', ring: 'ring-slate-700',   chip: 'bg-slate-800/50 text-slate-400', label: 'Pending' },
@@ -67,8 +118,9 @@ export function AgentRow({ agent }: { agent: AgentTask }) {
         <StateIcon state={agent.state} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <div className="truncate text-[13px] font-medium text-slate-100">{agent.name}</div>
+          <AgentKindBadge kind={agent.kind} />
           <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase', s.chip)}>
             {s.label}
           </span>
