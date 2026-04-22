@@ -12,6 +12,8 @@ import {
 import { useOrchestrationStore } from '@/store/orchestrationStore';
 import { simulationEngine } from '@/lib/simulationEngine';
 import { cn } from '@/lib/cn';
+import type { AgentExecutionKind } from '@/types';
+import { AgentKindBadge } from '../pipeline/AgentRow';
 
 type StepState = 'pending' | 'running' | 'completed';
 
@@ -21,6 +23,7 @@ interface DeployStep {
   description: string;
   durationMs: number;
   completionNote: string;
+  kind: AgentExecutionKind;
 }
 
 const STEPS: DeployStep[] = [
@@ -29,28 +32,32 @@ const STEPS: DeployStep[] = [
     name: 'Release Promotion Agent',
     description: 'Promoting signed release tag v1.0.0 from pre-prod to production registry.',
     durationMs: 1800,
-    completionNote: 'Image platform/payments:v1.0.0 promoted · SBOM re-attested · signature verified.'
+    completionNote: 'Image platform/payments:v1.0.0 promoted · SBOM re-attested · signature verified.',
+    kind: 'deterministic'
   },
   {
     id: 'prod-deploy',
     name: 'Production Deploy Agent',
     description: 'Rolling blue/green deployment to payments-prod with 10% canary shift.',
     durationMs: 2600,
-    completionNote: '3/3 replicas READY in 41s · canary shifted to 100% · zero-downtime cutover.'
+    completionNote: '3/3 replicas READY in 41s · canary shifted to 100% · zero-downtime cutover.',
+    kind: 'deterministic'
   },
   {
     id: 'prod-smoke',
     name: 'Production Smoke Agent',
     description: 'Running post-deploy probes against live production service.',
     durationMs: 1800,
-    completionNote: '5/5 probes green · p95 178 ms · 0.0% error rate over 90s.'
+    completionNote: '5/5 probes green · p95 178 ms · 0.0% error rate over 90s.',
+    kind: 'deterministic'
   },
   {
     id: 'monitoring',
     name: 'Post-Deploy Monitoring Agent',
     description: 'Registering SLO alerts and confirming dashboards are reporting healthy.',
     durationMs: 1600,
-    completionNote: 'SLO alerts armed · Grafana dashboard live · on-call notified.'
+    completionNote: 'SLO alerts armed · Grafana dashboard live · on-call notified.',
+    kind: 'deterministic'
   }
 ];
 
@@ -229,7 +236,10 @@ export function ProductionDeployPanel() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-medium text-slate-100">{step.name}</div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="truncate text-[13px] font-medium text-slate-100">{step.name}</div>
+                    <AgentKindBadge kind={step.kind} />
+                  </div>
                   <div className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-slate-400">
                     {state === 'completed' ? step.completionNote : step.description}
                   </div>
