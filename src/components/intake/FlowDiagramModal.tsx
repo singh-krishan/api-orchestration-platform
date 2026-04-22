@@ -16,25 +16,28 @@ import {
   CheckCircle2,
   Wrench,
   ArrowDown,
-  ArrowRight
+  ArrowRight,
+  Cog
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-type NodeKind = 'input' | 'ai' | 'gate' | 'human' | 'fix' | 'done';
+type NodeKind = 'input' | 'ai' | 'deterministic' | 'hybrid' | 'human' | 'fix' | 'done';
 
 const KIND_STYLES: Record<NodeKind, string> = {
   input: 'border-slate-600 bg-slate-800/80 text-slate-100',
-  ai: 'border-cyan-400/40 bg-cyan-500/10 text-cyan-100',
-  gate: 'border-violet-400/40 bg-violet-500/10 text-violet-100',
-  human: 'border-amber-400/50 bg-amber-500/10 text-amber-100',
+  ai: 'border-violet-400/40 bg-violet-500/10 text-violet-100',
+  deterministic: 'border-sky-400/40 bg-sky-500/10 text-sky-100',
+  hybrid: 'border-amber-400/40 bg-amber-500/10 text-amber-100',
+  human: 'border-orange-400/50 bg-orange-500/10 text-orange-100',
   fix: 'border-red-400/40 bg-red-500/10 text-red-100',
   done: 'border-emerald-400/50 bg-emerald-500/10 text-emerald-100'
 };
 
 const LEGEND: { kind: NodeKind; label: string }[] = [
   { kind: 'input', label: 'Input' },
-  { kind: 'ai', label: 'AI Agent' },
-  { kind: 'gate', label: 'Automated Gate' },
+  { kind: 'ai', label: 'AI (LLM agent)' },
+  { kind: 'deterministic', label: 'Deterministic service' },
+  { kind: 'hybrid', label: 'Hybrid (Code + LLM)' },
   { kind: 'human', label: 'Human Approval' },
   { kind: 'fix', label: 'Failure / Fix Loop' },
   { kind: 'done', label: 'Complete' }
@@ -134,11 +137,13 @@ export function FlowDiagramModal({ open, onClose }: { open: boolean; onClose: ()
               </div>
 
               <p className="mb-5 text-[12.5px] leading-relaxed text-slate-300">
-                A backend interface specification enters on the left. AI agents draft, build,
-                validate, and assemble the release. Two human approval gates — Pre-Prod and
-                Production — ensure no deployment happens without sign-off. If an automated
-                gate fails, the pipeline halts, an operator applies a fix, and the run resumes
-                from the checkpoint.
+                A backend interface specification enters on the left. A small set of LLM agents
+                handle the open-ended work (reading the spec, drafting the OpenAPI contract),
+                while deterministic services own the rest of the critical path (validation,
+                code generation, CI, promotion, release packaging). Two human approval gates
+                — Pre-Prod and Production — ensure no deployment happens without sign-off. If
+                an automated gate fails, the pipeline halts, an operator applies a fix, and
+                the run resumes from the checkpoint.
               </p>
 
               {/* Flow */}
@@ -153,50 +158,57 @@ export function FlowDiagramModal({ open, onClose }: { open: boolean; onClose: ()
                 <Node
                   icon={Sparkles}
                   title="Spec Ingestion"
-                  subtitle="AI reads the spec and infers the API's purpose"
+                  subtitle="LLM reads the spec and extracts a structured SpecModel"
                   kind="ai"
                 />
                 <DownArrow />
                 <Node
                   icon={FileCode}
-                  title="OAS Authoring + QA"
-                  subtitle="AI drafts the OpenAPI contract and self-reviews it"
-                  kind="ai"
-                />
-                <DownArrow />
-                <Node
-                  icon={Boxes}
-                  title="Build Generation"
-                  subtitle="AI scaffolds the Spring Boot service and opens a merge request"
+                  title="OAS Authoring"
+                  subtitle="LLM drafts the OpenAPI 3.1 contract from the SpecModel"
                   kind="ai"
                 />
                 <DownArrow />
                 <Node
                   icon={ShieldCheck}
+                  title="OAS Validation & QA"
+                  subtitle="Spectral + OPA policy rules validate the contract — deterministic"
+                  kind="deterministic"
+                />
+                <DownArrow />
+                <Node
+                  icon={Boxes}
+                  title="Build Generation"
+                  subtitle="OpenAPI Generator scaffolds the Spring Boot service + opens an MR"
+                  kind="deterministic"
+                />
+                <DownArrow />
+                <Node
+                  icon={ShieldCheck}
                   title="Dev Validation"
-                  subtitle="Build, tests, quality gate, security scan"
-                  kind="gate"
+                  subtitle="Build, tests, SonarQube quality gate, security scan"
+                  kind="deterministic"
                 />
                 <DownArrow />
                 <Node
                   icon={Scale}
                   title="AI Governance & Evals"
-                  subtitle="Checks AI output against internal policy & guidelines"
-                  kind="gate"
+                  subtitle="Deterministic policy checks + LLM-assisted scoring of AI-authored artefacts"
+                  kind="hybrid"
                 />
                 <DownArrow />
                 <Node
                   icon={GitMerge}
                   title="Merge Request Validation"
                   subtitle="Pipeline runs against main; code merges only after green"
-                  kind="gate"
+                  kind="deterministic"
                 />
                 <DownArrow />
                 <Node
                   icon={Network}
                   title="System Integration Testing (SIT)"
                   subtitle="Deploys to SIT and runs contract + integration tests"
-                  kind="gate"
+                  kind="deterministic"
                 />
                 <DownArrow />
                 <Node
@@ -209,15 +221,15 @@ export function FlowDiagramModal({ open, onClose }: { open: boolean; onClose: ()
                 <Node
                   icon={Rocket}
                   title="Pre-Prod / Staging Rollout"
-                  subtitle="Automated deploy + readiness verification"
-                  kind="ai"
+                  subtitle="ArgoCD deploy + readiness probes — fully automated"
+                  kind="deterministic"
                 />
                 <DownArrow />
                 <Node
                   icon={Package}
                   title="Production Release Pack"
-                  subtitle="Manifest, rollback plan, evidence bundle assembled"
-                  kind="ai"
+                  subtitle="Manifest + rollback plan assembled (code) with an LLM-drafted summary"
+                  kind="hybrid"
                 />
                 <DownArrow />
                 <Node
@@ -262,10 +274,10 @@ export function FlowDiagramModal({ open, onClose }: { open: boolean; onClose: ()
                   <ArrowDown className="h-4 w-4 self-center text-red-300/80 sm:hidden" />
                   <div className="flex-1">
                     <Node
-                      icon={Sparkles}
+                      icon={Cog}
                       title="Resume from Checkpoint"
                       subtitle="Pipeline re-enters at the failed stage and continues"
-                      kind="ai"
+                      kind="deterministic"
                     />
                   </div>
                 </div>
