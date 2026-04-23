@@ -7,6 +7,7 @@ ADRs capture significant architectural decisions, the context behind them, and t
 | # | Title | Status |
 |---|---|---|
 | [0001](./0001-temporal-orchestration-gitlab-execution.md) | Use Temporal for orchestration; GitLab for CI execution | Accepted |
+| [0002](./0002-domain-facade-api-postgres-read-model.md) | Domain-facade API with a Postgres read model for the UI | Accepted |
 
 ## Format
 
